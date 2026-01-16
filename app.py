@@ -253,12 +253,9 @@ def group_by_type(rows: Iterable[AnnotationRow], sort_by_page: bool) -> Dict[str
     return grouped
 
 
-def metadata_line(row: AnnotationRow, document_title: str, include_document: bool) -> str:
+def metadata_line(row: AnnotationRow) -> str:
     """Build the metadata line for a row based on its group."""
-    parts = []
-    if include_document:
-        parts.append(f"document: {document_title}")
-    parts.append(f"page: {row.page}")
+    parts = [f"page: {row.page}"]
     if row.group == "Underlines" and row.subtype:
         parts.append(f"subtype: {row.subtype}")
     if row.group in {"Highlights", "Underlines"}:
@@ -275,81 +272,19 @@ def metadata_line(row: AnnotationRow, document_title: str, include_document: boo
     return " ".join(part if part else "" for part in parts).replace("  ", " ").strip()
 
 
-def highlight_sections(rows: Iterable[AnnotationRow]) -> Dict[str, List[AnnotationRow]]:
-    """Group highlight annotations by color value."""
-    grouped: Dict[str, List[AnnotationRow]] = {}
-    for row in rows:
-        if row.group != "Highlights":
-            continue
-        title = row.color_name or row.color_hex or "Unknown"
-        grouped.setdefault(title, []).append(row)
-    return grouped
-
-
-def underline_sections(rows: Iterable[AnnotationRow]) -> Dict[str, List[AnnotationRow]]:
-    """Group underline annotations by subtype."""
-    grouped: Dict[str, List[AnnotationRow]] = {}
-    for row in rows:
-        if row.group != "Underlines":
-            continue
-        title = row.subtype or "Underline"
-        grouped.setdefault(title, []).append(row)
-    return grouped
-
-
-def annotation_sections(
-    grouped_rows: Dict[str, List[AnnotationRow]],
-    include_empty_sections: bool,
-) -> List[Tuple[str, List[AnnotationRow]]]:
-    """Build ordered annotation sections based on highlight color and underline subtype."""
-    sections: List[Tuple[str, List[AnnotationRow]]] = []
-    highlight_groups = highlight_sections(grouped_rows.get("Highlights", []))
-    underline_groups = underline_sections(grouped_rows.get("Underlines", []))
-    for title, rows in sorted(highlight_groups.items()):
-        sections.append((title, rows))
-    for title, rows in sorted(underline_groups.items()):
-        sections.append((title, rows))
-    comments_rows = grouped_rows.get("Comments", [])
-    if comments_rows:
-        sections.append(("Comments", comments_rows))
-    if include_empty_sections:
-        if not highlight_groups:
-            sections.append(("Highlights", []))
-        if not underline_groups:
-            sections.append(("Underlines", []))
-        if not comments_rows:
-            sections.append(("Comments", []))
-    return sections
-
-
 def render_markdown(doc_title: str, grouped_rows: Dict[str, List[AnnotationRow]], options: AppOptions) -> str:
     """Render grouped annotations into Markdown."""
-    lines: List[str] = []
-    sections = annotation_sections(grouped_rows, options.include_empty_sections)
-    include_document = options.header_mode == "annotation"
-
-    if options.header_mode == "document":
-        lines.append(f"# {doc_title}")
-        for title, rows in sections:
-            if not rows and not options.include_empty_sections:
-                continue
-            lines.append(f"## {title}")
-            for row in rows:
-                text = row.text.strip()
-                lines.append(f"- \"{text}\"")
-                lines.append(f"  - {metadata_line(row, doc_title, include_document)}")
-                lines.append("")
-    else:
-        for title, rows in sections:
-            if not rows and not options.include_empty_sections:
-                continue
-            lines.append(f"# {title}")
-            lines.append(f"## {doc_title}")
-            for row in rows:
-                text = row.text.strip()
-                lines.append(f"- \"{text}\"")
-                lines.append(f"  - {metadata_line(row, doc_title, include_document)}")
-                lines.append("")
+    lines = [f"# {doc_title}"]
+    for section in ["Highlights", "Underlines", "Comments"]:
+        rows = grouped_rows.get(section, [])
+        if not rows and not options.include_empty_sections:
+            continue
+        lines.append(f"## {section}")
+        for row in rows:
+            text = row.text.strip()
+            lines.append(f"- \"{text}\"")
+            lines.append(f"  - {metadata_line(row)}")
+            lines.append("")
     return "\r\n".join(lines).rstrip() + "\r\n"
 
 
@@ -397,7 +332,6 @@ def run_gui() -> None:
     color_names_var = tk.BooleanVar(value=config.get("add_color_names", True))
     filename_title_var = tk.BooleanVar(value=config.get("use_filename_title", True))
     sort_var = tk.StringVar(value=config.get("sort_by_page", True) and "page" or "natural")
-    header_var = tk.StringVar(value=config.get("header_mode", "document"))
 
     status_var = tk.StringVar(value="Select a PDF folder to start.")
 
@@ -439,16 +373,6 @@ def run_gui() -> None:
     ttk.Label(sort_frame, text="Sort entries:").pack(side="left")
     ttk.Radiobutton(sort_frame, text="By page", value="page", variable=sort_var).pack(side="left")
     ttk.Radiobutton(sort_frame, text="Natural order", value="natural", variable=sort_var).pack(side="left")
-
-    header_frame = ttk.Frame(options_frame)
-    header_frame.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
-    ttk.Label(header_frame, text="Headers:").pack(side="left")
-    ttk.Radiobutton(
-        header_frame, text="Document (H1) then annotations (H2)", value="document", variable=header_var
-    ).pack(side="left")
-    ttk.Radiobutton(
-        header_frame, text="Annotations (H1) then document (H2)", value="annotation", variable=header_var
-    ).pack(side="left")
 
     button_frame = ttk.Frame(root)
     button_frame.pack(fill="x", padx=16, pady=12)
@@ -532,7 +456,6 @@ def run_gui() -> None:
             add_color_names=color_names_var.get(),
             use_filename_title=filename_title_var.get(),
             sort_by_page=sort_var.get() == "page",
-            header_mode=header_var.get(),
         )
 
         config_data = {
@@ -543,7 +466,6 @@ def run_gui() -> None:
             "add_color_names": options.add_color_names,
             "use_filename_title": options.use_filename_title,
             "sort_by_page": options.sort_by_page,
-            "header_mode": options.header_mode,
         }
         save_config(config_data)
 
