@@ -8,6 +8,7 @@ A Windows-friendly desktop app that scans PDFs in a folder and generates Markdow
 - Recursive scanning (optional).
 - Markdown output per PDF with annotations grouped by type.
 - Options for color naming, empty sections, and sorting.
+- Configurable header order (document vs. annotation sections).
 - Background processing keeps the UI responsive.
 
 ## Usage
@@ -17,6 +18,8 @@ A Windows-friendly desktop app that scans PDFs in a folder and generates Markdow
    ```powershell
    python app.py
    ```
+
+   If `pip` is not recognized, use `python -m pip` instead when installing packages.
 
 2. In the GUI:
    - Select a PDF folder.

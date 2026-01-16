@@ -44,6 +44,7 @@ class AppOptions:
     add_color_names: bool = True
     use_filename_title: bool = True
     sort_by_page: bool = True
+    header_mode: str = "document"
 
 
 @dataclass
